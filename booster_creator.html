@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Roster Counter</title>
+<link href="https://unpkg.com/tabulator-tables/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables/dist/js/tabulator.min.js"></script>
+<script src=" https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js "></script>
+<style>
+  body {
+    background-color: #666666;
+    color: #FFDD00;
+    font-size: 18px;
+    font-family: Tahoma;
+    overflow: auto;
+  }
+  a {
+    color: #000000;
+    
+  }
+  input[type="button"], input[type="file"]::file-selector-button, button {
+    background-color: #000000;    
+    color: #FFDD00;
+    font-size: 16px;
+    font-family: Tahoma;
+    border:solid 2px #FFDD00;
+    padding:5px;
+    margin:4px;
+    border-radius:0.5em;
+  }
+  input[type="button"]:hover, input[type="file"]::file-selector-button:hover, button:hover {
+    background-color: #888888;    
+  }
+  input[type="button"]:active, input[type="file"]::file-selector-button:active, button:active {
+    color: #886600;    
+    border-color: #886600;    
+  }
+
+</style>
+</head>
+<body class="app" id="app">
+<strong>Booster Print Sheet </strong><button id="reset-form">Reset Form</button>
+<br>
+<table id="step1" style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:50%; ">
+<tr><td colspan=2>Step 1: Add CSV input file and upload it.</td></tr>
+<tr><td><label>Card CSV File: </label></td><td><input type="file" id="final-input" /></td></tr>
+<tr><td colspan="2">No file? <a href="/card_file_list.csv">Download this one to use</a></td></tr>
+<tr><td colspan="2"><input type="button" id="upload" value="Upload Card List CSV"/></td></tr>
+</table>
+<table id="step2" style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:50%; visibility: hidden;">
+<tr><td colspan=2>Step 2: Enter the number of booster packs.</td></tr>
+<tr><td><label># of Packs: </label></td><td><input type="text" id="packs" value="0"/></td></tr>
+</table>
+<table id="step3" style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:50%; visibility: hidden;">
+<tr><td colspan=2>Step 3: Adjust these values to integers and so R+E+L counts = # of packs (RaresMatch = #ofPacks).</td></tr>
+<tr><td><label>Common#: </label></td><td><input type="text" id="packs-C" value="0"/></td></tr>
+<tr><td><label>Uncommon#: </label></td><td><input type="text" id="packs-U" value="0"/></td></tr>
+<tr><td><label>Rare#: </label></td><td><input type="text" id="packs-R" value="0"/></td></tr>
+<tr><td><label>Epic#: </label></td><td><input type="text" id="packs-E" value="0"/></td></tr>
+<tr><td><label>Legendary#: </label></td><td><input type="text" id="packs-L" value="0"/></td></tr>
+<tr><td><label>RaresMatch: </label></td><td><input type="text" id="packs-rares" value="0" disabled/></td></tr>
+<tr>
+  <td colspan="2"><input type="button" id="clicky" value="Process Data" disabled/></td>
+</tr>
+</table>
+<div id="step4" style="visibility: hidden;">
+<br>
+<strong>Booster Sheet: </strong>  
+<button id="card-csv">Download CSV</button>
+<div id="booster-sheet"></div>
+</div>
+<script>
+  var target_percent = { 'C': 66.67,'U': 25.0,'R': 5.0,'E': 2.5,'L': 0.83 }
+  var booster_size = 12
+  var rarities = ['C','U','R','E','L']
+  var card_columns = [
+      "@CARD1","@CARD2","@CARD3","@CARD4","@CARD5","@CARD6",
+      "@CARD7","@CARD8","@CARD9","@CARD10","@CARD11","@CARD12"
+  ]
+  var filepath = "C:\\RogueSignal\\"
+
+  document.getElementById("reset-form").addEventListener("click", function (event) { 
+    document.getElementById("step1").style.visibility = 'visible'
+    document.getElementById("step2").style.visibility = 'hidden'
+    document.getElementById("step3").style.visibility = 'hidden'
+    document.getElementById("step4").style.visibility = 'hidden'
+    document.getElementById("step1").style.display = ''
+    document.getElementById("step2").style.display = ''
+    document.getElementById("step3").style.display = ''
+  });
+  document.getElementById("card-csv").addEventListener("click", function (event) {
+    downloadTabulator('booster-sheet','csv','booster_card_data')
+  });
+  document.getElementById("upload").addEventListener("click", function (event) { 
+    document.getElementById("step2").style.visibility = 'visible'
+    parseFile(event) 
+  });
+  document.getElementById("clicky").addEventListener("click", function (event) { 
+    document.getElementById("step1").style.visibility = 'hidden'
+    document.getElementById("step2").style.visibility = 'hidden'
+    document.getElementById("step3").style.visibility = 'hidden'
+    document.getElementById("step4").style.visibility = 'visible'
+    buildBoosterSheet(event) 
+    document.getElementById("step1").style.display = 'none'
+    document.getElementById("step2").style.display = 'none'
+    document.getElementById("step3").style.display = 'none'
+  });
+  document.getElementById("packs").addEventListener("change", function (event) { 
+    document.getElementById("step3").style.visibility = 'visible'
+    updateCounts(event)
+  });
+  document.getElementById("packs").addEventListener("focusout", function (event) { 
+    document.getElementById("step3").style.visibility = 'visible'
+    updateCounts(event)
+  });
+  rarities.forEach((rarity) => {
+    document.getElementById(`packs-${rarity}`).addEventListener("change", function (event) { checkRares() });
+  })
+
+  var card_count = 0
+  var card_amount = {}
+  var num_packs = 0
+  var card_pools = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+  var card_source = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+  var card_counts = { 'C': 0,'U': 0,'R': 0,'E': 0,'L': 0 }
+  var last_deck = []
+  var stats_tables = {}
+
+  function updateCounts(ev) {
+    card_amount = {}
+    num_packs = document.getElementById('packs').value * 1
+    card_count = num_packs * booster_size
+    rarities.forEach((rarity) => {
+      card_amount[rarity] = roundy(card_count * (target_percent[rarity]/100),2)
+      document.getElementById(`packs-${rarity}`).value = card_amount[rarity]
+    })
+    checkRares()
+  }
+
+  function checkRares() {
+    num_packs = document.getElementById('packs').value * 1
+    rarities.forEach((rarity) => {
+      card_amount[rarity] = document.getElementById(`packs-${rarity}`).value * 1
+    })
+
+    document.getElementById('packs-rares').value = card_amount['R'] + card_amount['E'] + card_amount['L']
+    if (document.getElementById('packs-rares').value != num_packs) {
+      document.getElementById('packs-rares').value = `!!!${document.getElementById('packs-rares').value}`
+      document.getElementById("clicky").disabled = true
+    } else {
+      document.getElementById("clicky").disabled = false      
+    }
+  }
+
+  function parseFile(ev) {
+    let file1 = document.getElementById("final-input").files[0]
+    card_source = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+
+    Papa.parse(file1, {
+      header: true,
+      complete: function (results) {
+        // console.log(results.meta)
+        results.data.forEach((row) => {
+          card_source[row['rarity']].push(row['card'])
+        })
+        // console.log(card_source)
+        rarities.forEach((rarity) => {
+          card_counts[rarity] = card_source[rarity].length          
+        })        
+        // console.log(card_counts)
+      },
+    })
+  }
+
+  function buildBoosterSheet(event) {
+    var deck = []
+    num_packs = document.getElementById('packs').value * 1
+    rarities.forEach((rarity) => {
+      card_amount[rarity] = document.getElementById(`packs-${rarity}`).value * 1
+    })
+    // rarities.forEach((rarity) => { 
+    buildRarityPool(); 
+    console.log(card_pools)
+  // })
+    Array(num_packs).keys().forEach((i) => {
+      deck[i] = []
+      Array(8).keys().forEach((s) => {
+        deck[i].push(cardPoolPick('C'))
+      })
+      Array(3).keys().forEach((s) => {
+        deck[i].push(cardPoolPick('U'))
+      })
+      deck[i].push(cardRarePoolPick())
+    })
+    // console.log(deck)
+    drawTable('booster-sheet',card_columns,deck)
+//    downloadTabulator('booster-sheet','csv','booster_print_sheet')
+    last_deck = deck
+  }
+
+  function buildRarityPool() {
+    card_pools = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+    let rarity_count = 0
+    rarities.forEach((rarity)=> {
+      rarity_count = Math.floor(card_amount[rarity] / card_counts[rarity])
+      card_source[rarity].forEach((card) => {
+        Array(rarity_count).keys().forEach((i) => {
+          card_pools[rarity].push(card)
+        })
+      })
+console.log(`${rarity} Rarity Pool => Per: ${rarity_count} , Pool: ${card_pools[rarity].length} `)
+      var temp_set = []
+      var it = 0
+console.log(`${rarity} Card Pool adjustment ${card_amount[rarity] - card_pools[rarity].length}`)
+      while (card_pools[rarity].length < card_amount[rarity]) {
+        if (temp_set.length < 1) {
+console.log(`${rarity} Reset temp_set ${it}`)
+it++
+          temp_set = Array.from(card_source[rarity])
+        }
+console.log(`${rarity} Temp_set ${it} : ${temp_set.length}`)
+console.log(`${rarity} Sub Rarity Pool => ${rarity_count} , ${card_pools[rarity].length}`)
+
+        var card = getRandomInt(0,temp_set.length - 1)
+        card_pools[rarity].push(temp_set[card])
+        temp_set.splice(card, 1);
+      }
+    })
+  }
+
+  function cardPoolPick(rarity) {
+    var max = card_pools[rarity].length - 1
+    if (max < 0) { return null }
+    var rand = getRandomInt(0,max)
+    var card = card_pools[rarity][rand]
+    card_pools[rarity].splice(rand, 1);
+    return `${filepath}${card}`
+  }
+
+  function cardRarePoolPick() {
+    var card = null
+
+    while (card == null) {
+      var rare_roll = getRandomInt(0,83)
+      if (rare_roll < 50) {
+        card = cardPoolPick('R')
+      } else if (rare_roll < 75) {
+        card = cardPoolPick('E')
+      } else {
+        card = cardPoolPick('L')
+      }
+    }
+    return card
+  }
+
+  function downloadTabulator(table_name,filetype,filename) {
+    var table = stats_tables[table_name]
+    table.download(filetype, `booster_card_data.${filetype}`); //, {delimiter:","});
+  }    
+
+  function drawTable(t,headers,data) {
+    var hdata = []
+    var sheet = 0
+    data.forEach((row) => {
+      var tdat = {}
+      shuffle(row)
+      row.keys().forEach((i) => {
+        tdat[headers[i]] = row[i]
+      })
+      tdat['Sheet'] = ++sheet;
+      hdata.push(tdat)
+    })
+    // console.log(hdata)
+    // console.log(headers)
+    // stats_tables["card_stats"].download("csv", "data.csv", {delimiter:"."});
+    stats_tables[t] = new Tabulator(`#${t}`, {
+      data: hdata,
+      autoColumns:true, //create columns from data field names
+      // responsiveLayout: false,
+      renderHorizontal:"virtual", //enable horizontal virtual DOM
+      pagination:"local",
+      paginationSize:20,
+      // autoColumnsDefinitions:[
+      //   {field:'Card', headerFilter:true}, 
+      //   {field:'Rarity', headerFilter:true}, 
+      //   // {field:'', headerFilter:true}, 
+      //   // {field:'', headerFilter:true}, 
+      // ],        
+    })
+  }
+
+  function roundy(num,precision) {
+    let multi = Math.pow(10, precision); 
+    return (Math.round(num * multi) / multi)
+  }
+
+  function getRandomInt(min, max) {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function shuffle(array) {
+    let currentIndex = array.length;
+
+    // While there remain elements to shuffle...
+    while (currentIndex != 0) {
+
+      // Pick a remaining element...
+      let randomIndex = Math.floor(Math.random() * currentIndex);
+      currentIndex--;
+
+      // And swap it with the current element.
+      [array[currentIndex], array[randomIndex]] = [
+        array[randomIndex], array[currentIndex]];
+    }
+  }
+
+</script>
+</body>
+</html>
