@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Deck Analyzer</title>
+<link href="https://unpkg.com/tabulator-tables/dist/css/tabulator_midnight.min.css" rel="stylesheet">
+<script type="text/javascript" src="https://unpkg.com/tabulator-tables/dist/js/tabulator.min.js"></script>
+<script src=" https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js "></script>
+<style>
+  body {
+    background-color: #666666;
+    color: #FFDD00;
+    font-size: 18px;
+    font-family: Tahoma;
+  }
+</style>
+</head>
+<body class="app" id="app">
+<strong>Deck Final Print Sheet: </strong><br>
+<table style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:90%; ">
+<tr>
+  <td colspan=2><input type="file" id="final-input" /></td>
+</tr>
+<tr>
+  <td colspan="2"><input type="button" id="clicky" value="Process Data"/></td>
+</tr>
+</table>
+<br>
+<strong>Total Cards: </strong><span id="total_cards"></span>
+<br>
+<br>
+<strong>Group Stats: </strong>  
+  <button id="group-csv">Download CSV</button>
+<div id="group_stats">
+</div>
+<br>
+<strong>Card Stats: </strong>  
+  <button id="card-csv">Download CSV</button>
+<!--   <button id="card-xlsx">Download XLSX</button>
+  <button id="card-pdf">Download PDF</button>
+ -->
+ <div id="card_stats">
+</div>
+<script>
+  var card_types =  [ 'P','E','H','S','Se','I','M', ]
+  var card_columns = []
+  Array(60).keys().forEach((d) => { card_columns.push(`@CARD${d+1}`); })
+  var card_stats = {}
+  var rarity_stats = {};
+  var stats_tables = {}
+
+  resetData();
+
+  document.getElementById("clicky").addEventListener("click", function (event) { parseFiles(event) });
+  document.getElementById("card-csv").addEventListener("click", function (event) {
+    downloadTabulator(stats_tables["card_stats"],'csv','deck_card_data')
+  });
+  document.getElementById("group-csv").addEventListener("click", function (event) {
+    downloadTabulator(stats_tables["group_stats"],'csv','deck_card_stats')
+  });
+  // document.getElementById("card-xlsx").addEventListener("click", function (event) { 
+  //   downloadTabulator(stats_tables["card_stats"],'xlsx','booster_card_data')
+  // });
+  // document.getElementById("card-pdf").addEventListener("click", function (event) { 
+  //   downloadTabulator(stats_tables["card_stats"],'pdf','booster_card_data')
+  // });
+
+  function downloadTabulator(table,filetype,filename) {
+    table.download(filetype, `${filename}.${filetype}`); //, {delimiter:","});
+  }    
+
+  /* Resets the global vars */
+  function resetData() {
+    stats_tables = {}
+    card_stats = {}
+    group_stats = { 
+      rarity: { 'C':0, 'U':0,'R':0,'E':0,'L':0 ,'total':0, },  
+      rarity_percent: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      rarity_ratio: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      expected_ratio: { 'C': 502,'U': 188,'R': 38,'E': 19,'L': 6,'total':0, },
+      expected_percent: { 'C': 66.67,'U': 25.0,'R': 5.0,'E': 2.5,'L': 0.83,'total':0,  },
+      // expected_total: { 'L': 240, 'E': 720, 'R': 1440, 'U': 7200, 'C': 19200 },
+      total_cards: 0,
+      rarity_percent_diff: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },  
+      rarity_ratio_diff: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },  
+      rarity_diff: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      P: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      E: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      H: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      S: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      Se: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      I: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, },
+      M: { 'C':0, 'U':0,'R':0,'E':0,'L':0,'total':0, }, 
+    }
+  }
+
+  /* Main method */
+  function parseFiles(ev) {
+    resetData();
+    let file1 = document.getElementById("final-input").files[0]
+
+    Papa.parse(file1, {
+      header: true,
+      complete: function (results) {
+        console.log(results.meta)
+        results.data.forEach((row) => {
+          cardCounter(row)
+        })
+        let rarities = ['C','U','R','E','L']
+        rarities.forEach((rarity) => {
+          var c_rarity = group_stats['rarity'][rarity]
+          var perc = (c_rarity / group_stats['total_cards'])*100
+          group_stats['rarity']['total'] += group_stats['rarity'][rarity]
+
+          group_stats['rarity_percent'][rarity] = roundy(perc,2)
+          group_stats['rarity_percent']['total'] += group_stats['rarity_percent'][rarity]
+
+          group_stats['rarity_ratio'][rarity] = roundy((753/group_stats['total_cards'])*c_rarity,2)
+          group_stats['rarity_ratio']['total'] += group_stats['rarity_ratio'][rarity]
+          group_stats['rarity_percent_diff'][rarity] = roundy(group_stats['rarity_percent'][rarity] - 
+                                                          group_stats['expected_percent'][rarity],3)
+          group_stats['rarity_percent_diff']['total'] += group_stats['rarity_percent_diff'][rarity]
+          group_stats['rarity_ratio_diff'][rarity] = roundy(group_stats['rarity_ratio'][rarity] - 
+                                                          group_stats['expected_ratio'][rarity],3)
+          group_stats['rarity_ratio_diff']['total'] += group_stats['rarity_ratio_diff'][rarity]
+          // group_stats['rarity_diff'][rarity] = group_stats['rarity'][rarity] - group_stats['expected_total'][rarity]
+          group_stats['expected_ratio']['total'] += group_stats['expected_ratio'][rarity]
+          group_stats['expected_percent']['total'] += group_stats['expected_percent'][rarity]
+        })
+
+        group_stats['rarity_ratio']['total'] = roundy(group_stats['rarity_ratio']['total'],0)
+        group_stats['rarity_percent_diff']['total'] = roundy(group_stats['rarity_percent_diff']['total'],3)
+        group_stats['rarity_ratio_diff']['total'] = roundy(group_stats['rarity_ratio_diff']['total'],3)
+        console.log(card_stats)
+        console.log(group_stats)
+        outputCardStats(group_stats)
+        outputCardData(card_stats)
+      }      
+    })
+  }
+
+  function cardCounter(row) {
+// C:\RogueSignal\089-I-E.jpg
+
+    card_columns.forEach((ccol) => {
+      if (card_stats[row[ccol]] == undefined) {
+        card_stats[row[ccol]] = 0
+      } 
+      card_stats[row[ccol]]++;
+      group_stats['total_cards']++;
+      let rarity = row[ccol].match(/\-\w*\-(\w)/).pop()
+      let type = row[ccol].match(/\-(\w*)\-\w/).pop();
+      group_stats['rarity'][rarity]++;
+      group_stats[type][rarity]++;
+      group_stats[type]['total']++;      
+    })
+  }
+
+  /* Handles data to display in tables etc after parsing */
+  function outputCardData(cards) {
+    var cdata = []
+    Array.from(Object.entries(cards)).forEach((card) => {
+      let rarity = card[0].match(/\-\w*\-(\w)/).pop()
+      let type = card[0].match(/\-(\w*)\-\w/).pop();
+
+      cdata.push({ 
+        'Card': card[0].replace('C:\\RogueSignal\\', ''), 
+        'Type': type,
+        'Rarity': rarity,
+        'Count': card[1], 
+        'Card Rarity %': roundy(card[1]/group_stats['rarity'][rarity],2),
+        'Card Ratio': roundy((753/28800)*card[1],2),
+        // 'Type Ratio': roundy((753/28800)*group_stats['rarity'][rarity],2),
+      })
+    })
+    let t = 'card_stats'
+    // stats_tables["card_stats"].download("csv", "data.csv", {delimiter:"."});
+    stats_tables[t] = new Tabulator(`#${t}`, {
+      data: cdata,
+      autoColumns:true, //create columns from data field names
+      // pagination:"local",
+      // paginationSize:20,
+      autoColumnsDefinitions:[
+        {field:'Card', headerFilter:true}, 
+        {field:'Type', headerFilter:true}, 
+        {field:'Rarity', headerFilter:true}, 
+        // {field:'', headerFilter:true}, 
+        // {field:'', headerFilter:true}, 
+      ],        
+    })
+  }
+
+  function outputCardStats(stats) {
+  // "total_cards",
+    var cdata = []
+    var cstats = [
+      // "expected_total",
+      "expected_percent","expected_ratio",
+      "rarity","rarity_percent","rarity_ratio",
+      // "rarity_diff",
+      "rarity_percent_diff",'rarity_ratio_diff',
+      'P','E','H','S','Se','I','M',
+    ]
+    cstats.forEach((stat) => {
+      cdata.push({ Stat: snakeToLabel(stat), ...group_stats[stat] })
+    })
+    console.log(cdata)
+    let t = 'group_stats'
+    stats_tables[t] = new Tabulator(`#${t}`, {
+      data: cdata, //assign data to table
+      autoColumns:true, //create columns from data field names
+    })
+    document.getElementById('total_cards').innerText = group_stats['total_cards']
+  }
+
+// snakeToLabel(key), value: value }));
+  function snakeToLabel(str) {
+    return str
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+  }
+
+  function roundy(num,precision) {
+    let multi = Math.pow(10, precision); 
+    return (Math.round(num * multi) / multi)
+  }
+</script>
+</body>
+</html>
+

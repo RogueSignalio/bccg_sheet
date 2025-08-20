@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Booster Creator</title>
+<title>Deck Creator</title>
 <link href="https://unpkg.com/tabulator-tables/dist/css/tabulator_midnight.min.css" rel="stylesheet">
 <script type="text/javascript" src="https://unpkg.com/tabulator-tables/dist/js/tabulator.min.js"></script>
 <script src=" https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js "></script>
@@ -40,7 +40,7 @@
 </style>
 </head>
 <body class="app" id="app">
-<strong>BCCG Booster Creator </strong><button id="reset-form">Reset Form</button>
+<strong>BCCG Deck Creator -- </strong><button id="reset-form">Reset Form</button>
 <br>
 <table id="step1" style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:50%; ">
 <tr><td colspan=2>Step 1: Add CSV input file and upload it.</td></tr>
@@ -49,8 +49,8 @@
 <tr><td colspan="2"><input type="button" id="upload" value="Upload Card List CSV"/></td></tr>
 </table>
 <table id="step2" style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:50%; visibility: hidden;">
-<tr><td colspan=2>Step 2: Enter the number of booster packs.</td></tr>
-<tr><td><label># of Packs: </label></td><td><input type="text" id="packs" value="0"/></td></tr>
+<tr><td colspan=2>Step 2: Enter the number of decks.</td></tr>
+<tr><td><label># of Decks: </label></td><td><input type="text" id="packs" value="0"/></td></tr>
 </table>
 <table id="step3" style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:50%; visibility: hidden;">
 <tr><td colspan=2>Step 3: Adjust these values to integers and so R+E+L counts = # of packs (RaresMatch = #ofPacks).</td></tr>
@@ -66,18 +66,24 @@
 </table>
 <div id="step4" style="visibility: hidden;">
 <br>
-<strong>Booster Print Sheet: </strong>  
+<strong>Deck Print Sheet: </strong>  
 <button id="card-csv">Download CSV</button>
-<div id="booster-sheet"></div>
+<div id="deck-sheet"></div>
 </div>
 <script>
   var target_percent = { 'C': 66.67,'U': 25.0,'R': 5.0,'E': 2.5,'L': 0.83 }
-  var booster_size = 12
+  var deck_size = 60
   var rarities = ['C','U','R','E','L']
-  var card_columns = [
-      "@CARD1","@CARD2","@CARD3","@CARD4","@CARD5","@CARD6",
-      "@CARD7","@CARD8","@CARD9","@CARD10","@CARD11","@CARD12"
-  ]
+  var deck_sizes = {
+    'P': 4, 'E': 12, 'H': 12,
+    'S': 6, 'Se': 3, 'I': 18, 'M': 5,
+  }
+  var rarity_target = {
+    'C': 40, 'U': 15, '*': 5,
+  }
+  var card_types =  [ 'P','E','H','S','Se','I','M', ]
+  var card_columns = []
+  Array(60).keys().forEach((d) => { card_columns.push(`@CARD${d+1}`); })
   var filepath = "C:\\RogueSignal\\"
 
   document.getElementById("reset-form").addEventListener("click", function (event) { 
@@ -90,7 +96,7 @@
     document.getElementById("step3").style.display = ''
   });
   document.getElementById("card-csv").addEventListener("click", function (event) {
-    downloadTabulator('booster-sheet','csv','booster_card_data')
+    downloadTabulator('deck-sheet','csv','deck_card_data')
   });
   document.getElementById("upload").addEventListener("click", function (event) { 
     document.getElementById("step2").style.visibility = 'visible'
@@ -122,15 +128,16 @@
   var card_amount = {}
   var num_packs = 0
   var card_pools = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
-  var card_source = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+  var card_source = { }
   var card_counts = { 'C': 0,'U': 0,'R': 0,'E': 0,'L': 0 }
+  var card_type_counts = { 'P': 0,'E': 0,'H': 0,'S': 0,'Se': 0,'I': 0,'M': 0 }
   var last_deck = []
   var stats_tables = {}
 
   function updateCounts(ev) {
     card_amount = {}
     num_packs = document.getElementById('packs').value * 1
-    card_count = num_packs * booster_size
+    card_count = num_packs * deck_size
     rarities.forEach((rarity) => {
       card_amount[rarity] = roundy(card_count * (target_percent[rarity]/100),2)
       document.getElementById(`packs-${rarity}`).value = card_amount[rarity]
@@ -145,7 +152,7 @@
     })
 
     document.getElementById('packs-rares').value = card_amount['R'] + card_amount['E'] + card_amount['L']
-    if (document.getElementById('packs-rares').value != num_packs) {
+    if (document.getElementById('packs-rares').value != (num_packs * 5) {
       document.getElementById('packs-rares').value = `!!!${document.getElementById('packs-rares').value}`
       document.getElementById("clicky").disabled = true
     } else {
@@ -155,52 +162,80 @@
 
   function parseFile(ev) {
     let file1 = document.getElementById("final-input").files[0]
-    card_source = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+    card_source = { 
+      'P': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+      'E': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+      'H': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+      'S': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+      'Se': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+      'I': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+      'M': { 'C': [],'U': [],'R': [],'E': [],'L': [] },
+    }
+    card_counts = { 'C': 0,'U': 0,'R': 0,'E': 0,'L': 0 }
+    card_type_counts = { 'P': 0,'E': 0,'H': 0,'S': 0,'Se': 0,'I': 0,'M': 0 }
 
     Papa.parse(file1, {
       header: true,
       complete: function (results) {
         // console.log(results.meta)
         results.data.forEach((row) => {
-          card_source[row['rarity']].push(row['card'])
+          rarity = row['rarity']
+          type = row['type']
+          card_source[type][rarity].push(row['card'])
         })
-        // console.log(card_source)
-        rarities.forEach((rarity) => {
-          card_counts[rarity] = card_source[rarity].length          
+        console.log(card_source)
+        card_types.forEach((type) => {
+            rarities.forEach((rarity) => {
+              card_type_counts[type] += card_source[type][rarity].length
+              card_counts[rarity] += card_source[type][rarity].length
+            })          
         })        
-        // console.log(card_counts)
+        console.log(card_type_counts)
+        console.log(card_counts)
       },
     })
   }
 
-  function buildBoosterSheet(event) {
+  function buildDeckSheet(event) {
     var deck = []
     num_packs = document.getElementById('packs').value * 1
     rarities.forEach((rarity) => {
       card_amount[rarity] = document.getElementById(`packs-${rarity}`).value * 1
     })
     // rarities.forEach((rarity) => { 
-    buildRarityPool(); 
+    buildDeckPools(); 
     console.log(card_pools)
   // })
-    Array(num_packs).keys().forEach((i) => {
-      deck[i] = []
-      Array(8).keys().forEach((s) => {
-        deck[i].push(cardPoolPick('C'))
-      })
-      Array(3).keys().forEach((s) => {
-        deck[i].push(cardPoolPick('U'))
-      })
-      deck[i].push(cardRarePoolPick())
-    })
-    // console.log(deck)
-    drawTable('booster-sheet',card_columns,deck)
-//    downloadTabulator('booster-sheet','csv','booster_print_sheet')
-    last_deck = deck
+//     Array(num_packs).keys().forEach((i) => {
+//       deck[i] = []
+
+//       card_types.forEach((type) => {
+//         Array(deck_size[type]).keys().forEach((s) => {
+//           deck[i].push(cardDeckPoolPick('P'))
+//         })
+//         deck[i].push(cardRarePoolPick())
+//       })
+//     })
+//     // console.log(deck)
+//     drawTable('deck-sheet',card_columns,deck)
+// //    downloadTabulator('booster-sheet','csv','booster_print_sheet')
+//     last_deck = deck
+  }
+
+  // Create "rare" pool first (5 * deck_size)
+  // Then iterate thru types, 
+  // creating pools for C and U
+  // Calc number of cards per type for all decks
+  // 
+  function buildDeckPools() {
+    card_types.forEach((type) => {
+      let type_size = deck_sizes[type] * num_packs
+
+    })    
   }
 
   function buildRarityPool() {
-    card_pools = { 'C': [],'U': [],'R': [],'E': [],'L': [] }
+    card_pools = { 'C': [],'U': [],'R': [],'E': [],'L': [] }    
     let rarity_count = 0
     rarities.forEach((rarity)=> {
       rarity_count = Math.floor(card_amount[rarity] / card_counts[rarity])
