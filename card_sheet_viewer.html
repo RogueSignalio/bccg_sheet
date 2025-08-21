@@ -4,31 +4,42 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Card CSV Print Viewer</title>
+<title>CSV Card Viewer</title>
 <link href="bccg_tools.css" rel="stylesheet">
 <link href="/bccg_tools.css" rel="stylesheet">
 <script src=" https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js "></script>
+<style>
+</style>
 </head>
 <body class="app" id="app">
-<strong>Final Print CSV: </strong><br>
-<table style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:90%; ">
+<table id="step1" style="width:60%;">
+<tr><td colspan="2"><strong>Final CSV Card Viewer</strong></td></tr>
+<tr><td colspan="2">Step 1: Add CSV input file and upload it.</td></tr>
 <tr>
-  <td colspan=2><input type="file" id="final-input" /></td>
+  <td colspan="1"><label>Final CSV File: </label><input type="file" id="final-input" /></td>
+  <td colspan="1" style="text-align:right;"><input type="button" id="clicky" value="Process Data"/></td>
 </tr>
-<tr>
-  <td colspan="2"><input type="button" id="clicky" value="Process Data"/></td>
-</tr>
-<tr><td><label>Page#: </label></td><td>
-  <input type="number" id="sheet-number" value="1"/>
+</table>
+<table id="step2" style="visibility:hidden;width:60%; ">
+<tr><td colspan=2><label>Step 2: Display Pack#:</label>
+  <input type="number" id="sheet-number" value="1" size=2/>
   <input type="button" id="prev" value="< Prev"/>
   <input type="button" id="next" value="Next >"/>
-</td></tr>
+</td>
+<td style="text-align:right"><input type="button" id="restart" value="Restart"/></td>
 </table>
-<br>
-<div id="card_stats" style="white-space:nowrap;overflow:auto;width:98%;height:500px;"></div>
+<div id="card_stats" style="white-space:nowrap;overflow:auto;width:98%;"></div>
 <script>
   var card_sheets = []
 
+  document.getElementById("restart").addEventListener("click", function (event) { 
+    document.getElementById("card_stats").innerHTML = '';
+    document.getElementById("sheet-number").value = 1  
+    document.getElementById("step1").style.visibility = 'visible'
+    document.getElementById("step1").style.display = ''
+    document.getElementById("step2").style.visibility = 'hidden'
+    document.getElementById("step2").style.display = 'none'
+  });
   document.getElementById("prev").addEventListener("click", function (event) { 
     document.getElementById("sheet-number").value = (document.getElementById("sheet-number").value * 1) - 1
     if (document.getElementById("sheet-number").value < 1) {
@@ -46,6 +57,10 @@
   document.getElementById("clicky").addEventListener("click", function (event) { 
     document.getElementById("sheet-number").value = 1  
     parseFiles(event) 
+    document.getElementById("step1").style.visibility = 'hidden'
+    document.getElementById("step1").style.display = 'none'
+    document.getElementById("step2").style.visibility = 'visible'
+    document.getElementById("step2").style.display = ''
   });
   document.getElementById("sheet-number").addEventListener("focusout", function (event) { 
     cardSheetVisualize( document.getElementById("sheet-number").value * 1)
@@ -91,7 +106,7 @@
     card_columns.forEach((ccol) => {
       card = row[ccol]
       // if (card != undefined) {
-         card_row.push(card.match(/(\d*)\-\w*\-\w/).pop())
+         card_row.push(card)
       // } 
     })
     card_sheets.push(card_row)
@@ -99,13 +114,17 @@
 
   function cardSheetVisualize(sheet) {
     let card_row = card_sheets[sheet-1]
+
     document.getElementById("card_stats").innerHTML = '';
     document.getElementById("card_stats").insertAdjacentHTML('beforeend',`<strong>Page #${sheet}: </strong><br>`);
     let i = 0; let k = 0;
 
     card_row.forEach((card) => {
+      let id = card.match(/(\d*)\-\w*\-\w/).pop()
+      let type = card.match(/\d*\-(\w*)\-\w/).pop()
+      let rarity = card.match(/\d*\-\w*\-(\w)/).pop()
       document.getElementById("card_stats").insertAdjacentHTML('beforeend',
-      `<img src="https://explorer.bitcoin-ccg.roguesignal.io/card_image/${card}" style="border:solid 1px #000000;width:220px;margin:3px;">`); 
+      `<img src="https://explorer.bitcoin-ccg.roguesignal.io/card_image/${id}" style="border:solid 1px #000000;width:220px;min-width:220px;margin:3px;" alt="${card}">`); 
       i++;
       k++;
       if (i == 6) {

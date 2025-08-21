@@ -13,7 +13,7 @@
     float: none;
   }
   a {
-    color: #000000;
+    color: #FFFFDD;
   }
   input[type="button"], input[type="file"]::file-selector-button, button {
     background-color: #000000;    
@@ -32,3 +32,11 @@
     color: #886600;    
     border-color: #886600;    
   }
+td {
+/*  border: 1px dotted #999;*/
+}
+table {
+  border: 5px solid #FFCC00; 
+  border-radius: 0.5em; 
+  padding: 8px;
+}
