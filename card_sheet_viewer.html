@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Card CSV Print Viewer</title>
+<link href="bccg_tools.css" rel="stylesheet">
+<link href="/bccg_tools.css" rel="stylesheet">
+<script src=" https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js "></script>
+</head>
+<body class="app" id="app">
+<strong>Final Print CSV: </strong><br>
+<table style="border: 5px solid #FFCC00; border-radius: 0.5em; padding: 8px; width:90%; ">
+<tr>
+  <td colspan=2><input type="file" id="final-input" /></td>
+</tr>
+<tr>
+  <td colspan="2"><input type="button" id="clicky" value="Process Data"/></td>
+</tr>
+<tr><td><label>Page#: </label></td><td>
+  <input type="number" id="sheet-number" value="1"/>
+  <input type="button" id="prev" value="< Prev"/>
+  <input type="button" id="next" value="Next >"/>
+</td></tr>
+</table>
+<br>
+<div id="card_stats" style="white-space:nowrap;overflow:auto;width:98%;height:500px;"></div>
+<script>
+  var card_sheets = []
+
+  document.getElementById("prev").addEventListener("click", function (event) { 
+    document.getElementById("sheet-number").value = (document.getElementById("sheet-number").value * 1) - 1
+    if (document.getElementById("sheet-number").value < 1) {
+      document.getElementById("sheet-number").value = 1  
+    }
+    cardSheetVisualize( document.getElementById("sheet-number").value * 1)
+  });
+  document.getElementById("next").addEventListener("click", function (event) { 
+    document.getElementById("sheet-number").value = (document.getElementById("sheet-number").value * 1) + 1
+    if (document.getElementById("sheet-number").value > card_sheets.length) {
+      document.getElementById("sheet-number").value = card_sheets.length
+    }
+    cardSheetVisualize( document.getElementById("sheet-number").value * 1)
+  });
+  document.getElementById("clicky").addEventListener("click", function (event) { 
+    document.getElementById("sheet-number").value = 1  
+    parseFiles(event) 
+  });
+  document.getElementById("sheet-number").addEventListener("focusout", function (event) { 
+    cardSheetVisualize( document.getElementById("sheet-number").value * 1)
+  })
+  document.getElementById("sheet-number").addEventListener("change", function (event) { 
+    cardSheetVisualize(document.getElementById("sheet-number").value * 1)
+  })
+
+  /* Resets the global vars */
+  function resetData() {
+    card_sheets = []
+  }
+
+  /* Main method */
+  function parseFiles(ev) {
+    resetData();
+    let file1 = document.getElementById("final-input").files[0]
+
+    Papa.parse(file1, {
+      header: true,
+      complete: function (results) {
+        console.log(results.meta)
+        results.data.forEach((row) => {
+          cardVisualize(row)
+        })
+        cardSheetVisualize(document.getElementById("sheet-number").value * 1)
+      }      
+    })
+  }
+
+
+  function cardVisualize(row) {
+// C:\RogueSignal\089-I-E.jpg
+
+    let card_columns = []
+    let card_row = []
+    Object.keys(row).forEach((c) => {
+      if (/\@CARD/.test(c)) {
+        card_columns.push(c)
+      }
+    })
+
+    card_columns.forEach((ccol) => {
+      card = row[ccol]
+      // if (card != undefined) {
+         card_row.push(card.match(/(\d*)\-\w*\-\w/).pop())
+      // } 
+    })
+    card_sheets.push(card_row)
+  }
+
+  function cardSheetVisualize(sheet) {
+    let card_row = card_sheets[sheet-1]
+    document.getElementById("card_stats").innerHTML = '';
+    document.getElementById("card_stats").insertAdjacentHTML('beforeend',`<strong>Page #${sheet}: </strong><br>`);
+    let i = 0; let k = 0;
+
+    card_row.forEach((card) => {
+      document.getElementById("card_stats").insertAdjacentHTML('beforeend',
+      `<img src="https://explorer.bitcoin-ccg.roguesignal.io/card_image/${card}" style="border:solid 1px #000000;width:220px;margin:3px;">`); 
+      i++;
+      k++;
+      if (i == 6) {
+        document.getElementById("card_stats").insertAdjacentHTML('beforeend','<br>')
+        i = 0
+      }
+      if (k == 18) {
+        document.getElementById("card_stats").insertAdjacentHTML('beforeend','<hr>')
+        k = 0
+      }
+    })
+    document.getElementById("card_stats").insertAdjacentHTML('beforeend','<hr>')
+  }
+
+// snakeToLabel(key), value: value }));
+  function snakeToLabel(str) {
+    return str
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+  }
+
+  function roundy(num,precision) {
+    let multi = Math.pow(10, precision); 
+    return (Math.round(num * multi) / multi)
+  }
+</script>
+</body>
+</html>
+
